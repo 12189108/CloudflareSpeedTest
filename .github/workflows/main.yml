@@ -35,6 +35,7 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
       - name: Build Version Info
         id: version
+        shell: bash # 关键修复：所有平台统一使用 Bash
         run: |
           GIT_TAG=$(git describe --tags --abbrev=0 || echo "v0.0.0")
           GIT_COMMIT=$(git rev-parse --short HEAD)
@@ -42,7 +43,7 @@ jobs:
       - name: Build Binary
         env:
           CGO_ENABLED: 0
-          GOOS: ${{ matrix.os == 'windows-latest' && 'windows' || matrix.os == 'macos-latest' && 'darwin' || 'linux' }}
+          GOOS: ${{ contains(matrix.os, 'windows') && 'windows' || contains(matrix.os, 'macos') && 'darwin' || 'linux' }}
           GOARCH: ${{ matrix.arch }}
         run: |
           OUTPUT="CloudflareSpeedTest${{ matrix.ext || '' }}"
@@ -51,6 +52,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: CloudflareSpeedTest_${{ matrix.tags }}
-          path: |
-            CloudflareSpeedTest*
+          path: CloudflareSpeedTest*
           retention-days: 3
