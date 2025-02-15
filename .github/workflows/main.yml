@@ -1,51 +1,56 @@
-name: Go Multi-Platform Build
+name: CloudflareSpeedTest CI
 on: [push, pull_request]
-
+env:
+  GO_VERSION: 1.21.7
+  PKG_NAME: github.com/XIU2/CloudflareSpeedTest
 jobs:
   build:
-    name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
-    runs-on: ubuntu-latest
+    name: Build ${{ matrix.os }} (${{ matrix.arch }})
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         include:
-          - goos: linux
-            goarch: amd64
-            suffix: ""
-          - goos: linux
-            goarch: arm64
-            suffix: ""
-          - goos: darwin
-            goarch: amd64
-            suffix: ""
-          - goos: darwin
-            goarch: arm64
-            suffix: ""
-          - goos: windows
-            goarch: amd64
-            suffix: .exe
-          - goos: windows
-            goarch: arm64
-            suffix: .exe
+          - os: ubuntu-latest
+            arch: amd64
+            tags: linux_amd64
+          - os: ubuntu-latest
+            arch: arm64
+            tags: linux_arm64
+          - os: macos-latest
+            arch: amd64
+            tags: darwin_amd64
+          - os: macos-latest
+            arch: arm64
+            tags: darwin_arm64
+          - os: windows-latest
+            arch: amd64
+            tags: windows_amd64
+            ext: .exe
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v4
+      - uses: actions/checkout@v4
         with:
-          go-version: '1.21'  # 根据项目需求调整版本
-
-      - name: Build
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: 0  # 禁用CGO确保纯静态编译
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Build Version Info
+        id: version
         run: |
-          output_name="bin/${GOOS}-${GOARCH}/app${SUFFIX}"
-          go build -v -trimpath -ldflags "-s -w" -o $output_name .
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+          GIT_TAG=$(git describe --tags --abbrev=0 || echo "v0.0.0")
+          GIT_COMMIT=$(git rev-parse --short HEAD)
+          echo "VERSION=${GIT_TAG}-${GIT_COMMIT}" >> $GITHUB_ENV
+      - name: Build Binary
+        env:
+          CGO_ENABLED: 0
+          GOOS: ${{ matrix.os == 'windows-latest' && 'windows' || matrix.os == 'macos-latest' && 'darwin' || 'linux' }}
+          GOARCH: ${{ matrix.arch }}
+        run: |
+          OUTPUT="CloudflareSpeedTest${{ matrix.ext || '' }}"
+          LDFLAGS="-X main.version=${{ env.VERSION }} -s -w"
+          go build -trimpath -ldflags "$LDFLAGS" -o $OUTPUT
+      - uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.goos }}-${{ matrix.goarch }}
-          path: bin/${{ matrix.goos }}-${{ matrix.goarch }}/*
+          name: CloudflareSpeedTest_${{ matrix.tags }}
+          path: |
+            CloudflareSpeedTest*
+          retention-days: 3
